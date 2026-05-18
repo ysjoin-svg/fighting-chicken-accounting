@@ -347,5 +347,5 @@ app.get('/api/summary/:year', (req, res) => {
   res.json({ summary, ytd: { revenue: ytdRevenue, expenses: ytdExpenses, profit: ytdRevenue - ytdExpenses } });
 });
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`戰鬥雞記帳軟體已啟動：http://localhost:${PORT}`));
