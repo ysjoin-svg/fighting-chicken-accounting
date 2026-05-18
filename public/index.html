@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>戰鬥雞記帳軟體 — 吉林店</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🐔 戰鬥雞記帳軟體</h1>
+    <div class="subtitle">吉林店 · 營收支出管理</div>
+  </div>
+  <div style="text-align:right; font-size:0.82rem; opacity:0.9; display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+    <div id="header-summary"></div>
+    <div id="header-ytd" style="font-size:0.78rem; opacity:0.8;"></div>
+  </div>
+</div>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('monthly')">月度記帳</button>
+  <button class="tab-btn" onclick="switchTab('annual')">年度總覽</button>
+</div>
+
+<!-- ── 月度記帳頁 ── -->
+<div id="page-monthly" class="page active">
+  <div class="month-nav">
+    <button class="nav-btn" onclick="changeMonth(-1)">‹</button>
+    <div class="month-label" id="month-label">2026年1月</div>
+    <button class="nav-btn" onclick="changeMonth(1)">›</button>
+  </div>
+
+  <div class="main-content">
+    <!-- 月份摘要小卡 -->
+    <div class="summary-grid" id="mini-summary"></div>
+
+    <!-- 日曆 -->
+    <div class="section-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <div class="section-title" style="margin-bottom:0">每日門市營業額</div>
+        <!-- Uber 月度總額 -->
+        <div class="uber-monthly-row">
+          <span class="uber-label">🛵 Uber Eats 月度總額</span>
+          <input type="number" id="uber-monthly-display" class="uber-input" placeholder="0" min="0" step="1">
+          <button class="btn btn-secondary btn-small" onclick="saveUberMonthly()">儲存</button>
+        </div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid">
+        <div class="cal-header">一</div>
+        <div class="cal-header">二</div>
+        <div class="cal-header">三</div>
+        <div class="cal-header">四</div>
+        <div class="cal-header">五</div>
+        <div class="cal-header">六</div>
+        <div class="cal-header" style="color:var(--danger)">日</div>
+      </div>
+    </div>
+
+    <!-- 支出分類 -->
+    <div class="expense-grid" id="expense-grid"></div>
+
+    <!-- 月份損益摘要 -->
+    <div class="summary-full-card" id="pl-summary"></div>
+
+    <!-- 備註 -->
+    <div class="section-card">
+      <div class="section-title">備註</div>
+      <textarea class="note-area" id="note-area" placeholder="輸入本月備註..." rows="3"></textarea>
+      <div style="margin-top:8px; text-align:right;">
+        <button class="btn btn-secondary btn-small" onclick="saveNote()">儲存備註</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 年度總覽頁 ── -->
+<div id="page-annual" class="page">
+  <div class="main-content" style="padding-top:16px;">
+
+    <!-- YTD 截至目前累計損益 -->
+    <div class="section-card ytd-highlight" id="ytd-summary"></div>
+
+    <div class="section-card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0">年度損益總覽</div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div id="annual-year-select" style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:0.85rem; color:var(--text-mid);">查詢年度：</label>
+            <select id="year-select" onchange="loadAnnual()" style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-family:inherit; font-size:0.88rem; background:var(--bg-input); color:var(--text-dark);">
+              <option value="2025">2025年</option>
+              <option value="2026" selected>2026年</option>
+              <option value="2027">2027年</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary btn-small" onclick="importHistory()" title="匯入 2026 年 1~5 月歷史資料">📥 匯入歷史資料</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="annual-table" id="annual-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>門市營業額</th>
+              <th>Uber 外送</th>
+              <th>營業額合計</th>
+              <th>總支出</th>
+              <th>損益</th>
+              <th>營業天數</th>
+              <th>日均營業額</th>
+            </tr>
+          </thead>
+          <tbody id="annual-tbody"></tbody>
+          <tfoot>
+            <tr class="total-row" id="annual-total"></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 每日輸入 Modal ── -->
+<div class="modal-overlay" id="day-modal" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="modal-title">編輯營業額</h3>
+    <input type="hidden" id="modal-day">
+    <div class="toggle-row">
+      <span class="toggle-label">排休（不計算）</span>
+      <label class="toggle">
+        <input type="checkbox" id="modal-dayoff" onchange="toggleDayOff()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div id="modal-inputs">
+      <div class="form-group" style="margin-top:12px;">
+        <label>門市營業額（元）</label>
+        <input type="number" id="modal-store" placeholder="0" min="0" step="1">
+      </div>
+      <div class="form-group">
+        <label>Uber Eats 外送（元）</label>
+        <input type="number" id="modal-uber" placeholder="0" min="0" step="1">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeDayModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveDay()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 支出編輯 Modal ── -->
+<div class="modal-overlay" id="expense-modal" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3 id="exp-modal-title">編輯支出</h3>
+    <input type="hidden" id="exp-modal-id">
+    <div class="form-group">
+      <label>項目名稱</label>
+      <input type="text" id="exp-modal-name" placeholder="例：店租">
+    </div>
+    <div class="form-group">
+      <label>金額（元）</label>
+      <input type="number" id="exp-modal-amount" placeholder="0" min="0" step="1">
+    </div>
+    <div class="form-group">
+      <label>日期（選填，例：15）</label>
+      <input type="number" id="exp-modal-date" placeholder="留空表示整月" min="1" max="31">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-danger btn-small" onclick="deleteExpense()">刪除</button>
+      <button class="btn btn-secondary" onclick="closeExpenseModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveExpense()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
