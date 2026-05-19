@@ -43,14 +43,35 @@ async function loadMonth() {
   document.getElementById('month-label').textContent =
     `${currentYear}年${MONTHS[currentMonth - 1]}`;
 
-  const res = await fetch(`/api/month/${currentYear}/${currentMonth}`);
-  monthData = await res.json();
+  try {
+    const res = await fetch(`/api/month/${currentYear}/${currentMonth}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    monthData = await res.json();
+  } catch (e) {
+    showToast('⚠️ 載入資料失敗，請確認伺服器連線');
+    return;
+  }
 
   renderCalendar();
   renderExpenses();
   renderSummary();
   renderUberMonthly();
   document.getElementById('note-area').value = monthData.note || '';
+}
+
+// ── 更新 Header YTD（輕量版，不刷新整個年度表格）──
+async function refreshHeaderYtd() {
+  try {
+    const res = await fetch(`/api/summary/${currentYear}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const ytd = data.ytd;
+    if (!ytd) return;
+    const headerYtd = document.getElementById('header-ytd');
+    if (headerYtd) {
+      headerYtd.innerHTML = `年度累計 <span style="font-weight:700; color:${ytd.profit >= 0 ? '#5EC882' : '#DC6E6E'}">${ytd.profit >= 0 ? '+' : ''}${ytd.profit.toLocaleString()}</span>`;
+    }
+  } catch (e) { /* 靜默，不影響主流程 */ }
 }
 
 // ── Uber 月度總額 ──
@@ -62,14 +83,17 @@ function renderUberMonthly() {
 
 async function saveUberMonthly() {
   const val = parseFloat(document.getElementById('uber-monthly-display').value) || 0;
-  await fetch(`/api/month/${currentYear}/${currentMonth}/uber`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uber_monthly: val })
-  });
-  monthData.uber_monthly = val;
-  renderSummary();
-  showToast('Uber 月度總額已儲存');
+  try {
+    await fetch(`/api/month/${currentYear}/${currentMonth}/uber`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uber_monthly: val })
+    });
+    monthData.uber_monthly = val;
+    renderSummary();
+    showToast('Uber 月度總額已儲存');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 儲存失敗'); }
 }
 
 // ── 日曆渲染 ──
@@ -264,28 +288,33 @@ function onExpenseSelectChange(cat) {
 // ── 初始化固定支出 ──
 async function initFixedExpenses() {
   const choutai_amount = getOperatingDays() * 250;
-  const res = await fetch(`/api/month/${currentYear}/${currentMonth}/init-fixed`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ choutai_amount })
-  });
-  const data = await res.json();
-  await loadMonth();
-  showToast(`已套用固定支出（新增 ${data.added} 項）`);
+  try {
+    const res = await fetch(`/api/month/${currentYear}/${currentMonth}/init-fixed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choutai_amount })
+    });
+    const data = await res.json();
+    await loadMonth();
+    showToast(`已套用固定支出（新增 ${data.added} 項）`);
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 套用失敗'); }
 }
 
 // ── 匯入歷史資料 ──
 async function importHistory() {
   if (!confirm('確定匯入 2026 年 1~5 月歷史資料？\n⚠️ 這會清除並覆蓋已有的 1~5 月資料。')) return;
-  const res = await fetch('/api/import-history/2026', { method: 'POST' });
-  const data = await res.json();
-  if (data.ok) {
-    await loadMonth();
-    loadAnnual();
-    showToast(`歷史資料匯入完成（共 ${data.months} 個月份）`);
-  } else {
-    showToast('匯入失敗：' + (data.error || '未知錯誤'));
-  }
+  try {
+    const res = await fetch('/api/import-history/2026', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      await loadMonth();
+      await loadAnnual();
+      showToast(`歷史資料匯入完成（共 ${data.months} 個月份）`);
+    } else {
+      showToast('匯入失敗：' + (data.error || '未知錯誤'));
+    }
+  } catch (e) { showToast('⚠️ 匯入失敗，請確認伺服器連線'); }
 }
 
 function escHtml(s) {
@@ -373,19 +402,22 @@ async function saveDay() {
   const store = parseFloat(document.getElementById('modal-store').value) || 0;
   const uber = parseFloat(document.getElementById('modal-uber').value) || 0;
 
-  await fetch('/api/daily', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      year: currentYear, month: currentMonth, day,
-      store_amount: isDayOff ? 0 : store,
-      uber_amount: isDayOff ? 0 : uber,
-      is_day_off: isDayOff
-    })
-  });
-  closeDayModal();
-  await loadMonth();
-  showToast('已儲存');
+  try {
+    await fetch('/api/daily', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        year: currentYear, month: currentMonth, day,
+        store_amount: isDayOff ? 0 : store,
+        uber_amount: isDayOff ? 0 : uber,
+        is_day_off: isDayOff
+      })
+    });
+    closeDayModal();
+    await loadMonth();
+    showToast('已儲存');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 儲存失敗'); }
 }
 
 function closeDayModal() {
@@ -403,21 +435,23 @@ async function addExpense(cat) {
   const amount = parseFloat(document.getElementById(`amt-${cat}`).value) || 0;
   const dateVal = parseInt(document.getElementById(`date-${cat}`).value) || null;
 
-  await fetch('/api/expense', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      year: currentYear, month: currentMonth,
-      category: cat, item_name: name,
-      amount, expense_date: dateVal,
-      sort_order: monthData.expenses.filter(e => e.category === cat).length
-    })
-  });
-
-  document.getElementById(`amt-${cat}`).value = '';
-  document.getElementById(`date-${cat}`).value = '';
-  await loadMonth();
-  showToast('已新增');
+  try {
+    await fetch('/api/expense', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        year: currentYear, month: currentMonth,
+        category: cat, item_name: name,
+        amount, expense_date: dateVal,
+        sort_order: monthData.expenses.filter(e => e.category === cat).length
+      })
+    });
+    document.getElementById(`amt-${cat}`).value = '';
+    document.getElementById(`date-${cat}`).value = '';
+    await loadMonth();
+    showToast('已新增');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 新增失敗'); }
 }
 
 // ── 支出編輯 Modal ──
@@ -440,30 +474,39 @@ async function saveExpense() {
   const date = parseInt(document.getElementById('exp-modal-date').value) || null;
   if (!name) { showToast('請填寫項目名稱'); return; }
 
-  await fetch(`/api/expense/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ item_name: name, amount, expense_date: date })
-  });
-  closeExpenseModal();
-  await loadMonth();
-  showToast('已更新');
+  try {
+    await fetch(`/api/expense/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_name: name, amount, expense_date: date })
+    });
+    closeExpenseModal();
+    await loadMonth();
+    showToast('已更新');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 更新失敗'); }
 }
 
 async function deleteExpense() {
   if (!confirm('確定刪除此支出項目？')) return;
   const id = document.getElementById('exp-modal-id').value;
-  await fetch(`/api/expense/${id}`, { method: 'DELETE' });
-  closeExpenseModal();
-  await loadMonth();
-  showToast('已刪除');
+  try {
+    await fetch(`/api/expense/${id}`, { method: 'DELETE' });
+    closeExpenseModal();
+    await loadMonth();
+    showToast('已刪除');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 刪除失敗'); }
 }
 
 async function quickDelete(id) {
   if (!confirm('確定刪除？')) return;
-  await fetch(`/api/expense/${id}`, { method: 'DELETE' });
-  await loadMonth();
-  showToast('已刪除');
+  try {
+    await fetch(`/api/expense/${id}`, { method: 'DELETE' });
+    await loadMonth();
+    showToast('已刪除');
+    refreshHeaderYtd();
+  } catch (e) { showToast('⚠️ 刪除失敗'); }
 }
 
 function closeExpenseModal() {
