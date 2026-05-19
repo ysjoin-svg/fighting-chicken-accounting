@@ -325,7 +325,9 @@ function escHtml(s) {
 function renderSummary() {
   const sales = monthData.sales;
   const storeTotal = sales.filter(s => !s.is_day_off).reduce((a, s) => a + (s.store_amount || 0), 0);
-  const uberTotal = monthData.uber_monthly || 0;
+  const dailyUber = sales.filter(s => !s.is_day_off).reduce((a, s) => a + (s.uber_amount || 0), 0);
+  const uberMonthly = monthData.uber_monthly || 0;
+  const uberTotal = uberMonthly + dailyUber;
   const revenue = storeTotal + uberTotal;
   const opDays = getOperatingDays();
   const avgDaily = opDays > 0 ? revenue / opDays : 0;
@@ -338,11 +340,14 @@ function renderSummary() {
   const profit = revenue - totalExp;
 
   const mini = document.getElementById('mini-summary');
+  const uberSub = dailyUber > 0 && uberMonthly > 0
+    ? `每日累計 ${dailyUber.toLocaleString()} ＋ 月度 ${uberMonthly.toLocaleString()}`
+    : `Uber ${uberTotal.toLocaleString()}`;
   mini.innerHTML = `
     <div class="summary-card">
       <div class="summary-label">本月營業額</div>
       <div class="summary-value highlight num">${revenue.toLocaleString()}</div>
-      <div class="summary-sub">門市 ${storeTotal.toLocaleString()} ＋ Uber ${uberTotal.toLocaleString()}</div>
+      <div class="summary-sub">門市 ${storeTotal.toLocaleString()} ＋ ${uberSub}</div>
     </div>
     <div class="summary-card">
       <div class="summary-label">本月損益</div>
@@ -353,10 +358,14 @@ function renderSummary() {
 
   const plEl = document.getElementById('pl-summary');
   const plClass = profit >= 0 ? 'pl-positive' : 'pl-negative';
+  const uberRow = dailyUber > 0 && uberMonthly > 0
+    ? `<div class="summary-row"><span>🛵 Uber（每日累計）</span><span class="num">${dailyUber.toLocaleString()}</span></div>
+       <div class="summary-row"><span>🛵 Uber（月度手填）</span><span class="num">${uberMonthly.toLocaleString()}</span></div>`
+    : `<div class="summary-row"><span>🛵 Uber Eats</span><span class="num">${uberTotal.toLocaleString()}</span></div>`;
   plEl.innerHTML = `
     <div class="section-title">損益明細</div>
     <div class="summary-row"><span>🏪 門市營業額</span><span class="num">${storeTotal.toLocaleString()}</span></div>
-    <div class="summary-row"><span>🛵 Uber Eats（月度）</span><span class="num">${uberTotal.toLocaleString()}</span></div>
+    ${uberRow}
     <div class="summary-row total"><span>營業額合計</span><span class="num">${revenue.toLocaleString()}</span></div>
     <div style="height:8px"></div>
     <div class="summary-row"><span>📋 支出小計</span><span class="num">${expBycat['支出'].toLocaleString()}</span></div>
